@@ -25,8 +25,20 @@ m_L = 2.0            #(X)Mass of layup, per meter, without batteries(Kg)
 P_av = 2.0           #(X)Power consumption of avionics(servos, flight controller ect) (W)
 P_pld = 0.0          #(X)Power consuption  of payload(Remote id, leds, fpv ect) (W)
 
-L = 6.0              #Length of wing(M)         This will be a variable that will be optimized
+L = 5.0              #Length of wing(M)         This will be a variable that will be optimized
+L_min = 4.0            # Minimum wingspan (m)
+L_max = 6.0            # Maximum wingspan (m)
+
+
 m_bat = 3.5          #Weight of batteries(Kg)   This will be a veriable that will be optimized 
+e_bat = 250.0          # Specific energy (Wh/kg)
+f_usable = 0.80        # Fraction of rated energy usable
+reserve_fraction = 0.20
+
+
+# Simulation parameters
+dt_hours = 1.0 / 6.0   # 6-minute time steps
+simulation_hours = 48  # Two days to examine repeatability
 
 
 
@@ -95,4 +107,19 @@ def rho(h):
 
 
 
-dE_bat_dt = P_sol(L, lat, h, date_time, normal, Ch, Eta_mppt) - (P_level(L, m_bat, C_D, C_L, m_L, m_rest, h, Ch) / Eta_prop) - P_av - P_pld
+def dE_bat_dt(L, Ch, lat, h, date_time, normal, Eta_mppt,
+              C_D, C_L, m_L, m_rest, m_bat):
+    """Calculate the battery energy rate of change (W)."""
+
+    solar_power = P_sol(
+        L, lat, h, date_time, normal, Ch, Eta_mppt
+    )
+
+    propulsion_power = P_level(
+        L, m_bat, C_D, C_L, m_L, m_rest, h, Ch
+    ) / Eta_prop
+
+    total_load = propulsion_power + P_av + P_pld
+
+    return solar_power - total_load
+
