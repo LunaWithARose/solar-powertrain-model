@@ -30,7 +30,7 @@ def P_level(L, m_bat, C_D, C_L, m_L, m_rest, h, Ch):
     return (
         C_D / (C_L ** (3 / 2))
         * (
-            (total_mass * 9.81) ** 3
+           2 * (total_mass * 9.81) ** 3
             / (rho(h) * wing_area)
             * 2
         ) ** (1 / 2)
@@ -66,8 +66,6 @@ def rho(h):
 
 def dE_bat_dt(L, Ch, lat, h, date_time, normal, Eta_mppt,
               C_D, C_L, m_L, m_rest, m_bat, Eta_prop, P_av, P_pld):
-    """Calculate the battery energy rate of change (W)."""
-
     solar_power = P_sol(
         L, lat, h, date_time, normal, Ch, Eta_mppt
     )

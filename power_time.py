@@ -13,7 +13,6 @@ def plot_results(
     E_max,
     reserve_fraction
 ):
-    """Plot power and stored battery energy over time."""
 
     # One figure with two vertical axes
     fig, ax1 = plt.subplots(figsize=(13, 6))

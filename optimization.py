@@ -9,7 +9,7 @@ from power_time import plot_results
 
 lat = 46.7   #latitude of flight(degrees)
 h = 820      #altitude(M)
-date_time = datetime(2027, 6, 15, 7, 0) #date, Y-M-D-H-M
+date_time = datetime(2027, 6, 11, 7, 0) #date, Y-M-D-H-M
 normal = np.array([0,0,-1])   #North-East-Down normal vector
 
 C_L = 0.8            #Coeff of lift
@@ -31,15 +31,15 @@ Ch = 0.3             #Chord(M)
 L = 5.0              #Length of wing(M)         This will be a variable that will be optimized
 L_min = 4.0          # Minimum wingspan (M)
 L_max = 6.0          # Maximum wingspan (M)
-L_step = 1.0
+L_step = 0.1        
 
 m_bat = 2.5         #Weight of batteries(Kg)   This will be a veriable that will be optimized 
 m_bat_min = 1.0
 m_bat_max = 3.0
-m_bat_step = 1.0
+m_bat_step = 0.1
 e_bat = 250.0        #Specific energy (Wh/kg)
-f_usable = 0.90      #Fraction of rated energy usable
-reserve_fraction = 0.10  # Fraction of the battery we want available by morning
+f_usable = 0.80      #Fraction of rated energy usable
+reserve_fraction = 0.30  # Fraction of the battery we want available by morning
 
 # Simulation parameters
 dt_hours = 1.0 / 5.0   #5-minute time steps
