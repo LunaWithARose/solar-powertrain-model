@@ -3,6 +3,7 @@ from datetime import timedelta, datetime
 
 from functions import P_sol, P_level, dE_bat_dt
 from power_time import plot_results
+from battery_wingspan import plot_design_space
 
 
 # Aircraft and environmental parameters
@@ -28,14 +29,14 @@ P_pld = 0.0          #(X)Power consuption  of payload(Remote id, leds, fpv ect) 
 
 Ch = 0.3             #Chord(M)
 
-L = 5.0              #Length of wing(M)         This will be a variable that will be optimized
-L_min = 4.0          # Minimum wingspan (M)
-L_max = 6.0          # Maximum wingspan (M)
+L = 6.0              #Length of wing(M)         This will be a variable that will be optimized
+L_min = 3.0          # Minimum wingspan (M)
+L_max = 7.0          # Maximum wingspan (M)
 L_step = 0.1        
 
 m_bat = 2.5         #Weight of batteries(Kg)   This will be a veriable that will be optimized 
-m_bat_min = 1.0
-m_bat_max = 3.0
+m_bat_min = 0.0
+m_bat_max = 4.0
 m_bat_step = 0.1
 e_bat = 250.0        #Specific energy (Wh/kg)
 f_usable = 0.80      #Fraction of rated energy usable
