@@ -93,7 +93,12 @@ def optimize(date_time, dt_hours, p, L_step, m_bat_step, normal, lat, h, n_steps
                 "E_max": E_max,
                 "E_min": E_min,
                 "feasible": feasible,
+                "mean_solar_power": float(np.mean(solar_power)),
+                "total_mass": float(
+                    p["m_L"] * L_test + m_bat_test + p["m_rest"]
+                )
             }
+
 
             all_designs.append(result)
 
@@ -105,11 +110,35 @@ def optimize(date_time, dt_hours, p, L_step, m_bat_step, normal, lat, h, n_steps
         print("\nNo feasible design found within the search bounds.")
 
     else:
-        # minimum battery mass.
-        best = min(
-            feasible_designs,
-            key=lambda d: (d["m_bat"], d["L"])
+        max_ratio = max(
+            d["mean_solar_power"] / d["total_mass"]
+            for d in feasible_designs
         )
+
+        max_battery_mass = max(
+            d["m_bat"] for d in feasible_designs
+        )
+
+        min_battery_mass = min(
+            d["m_bat"] for d in feasible_designs
+        )
+
+        for d in feasible_designs:
+            ratio = d["mean_solar_power"] / d["total_mass"]
+
+            ratio_score = ratio / max_ratio
+
+            if max_battery_mass == min_battery_mass:
+                battery_score = 1.0
+            else:
+                battery_score = (
+                    (max_battery_mass - d["m_bat"])
+                    / (max_battery_mass - min_battery_mass)
+                )
+
+            d["score"] = 0.5 * ratio_score + 0.5 * battery_score
+
+        best = max(feasible_designs, key=lambda d: d["score"])
 
         L = best["L"]
         m_bat = best["m_bat"]
