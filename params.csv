@@ -1,0 +1,17 @@
+﻿param,value,description
+C_L,0.8,Coeff of lift
+C_D,0.017,"(Y)Coeff of drag, need to add parasitic and induced drag"
+Eta_prop,1,"(X)Prop, Esc, Motor effiency, need to test"
+Eta_mppt,0.97,"(X)Mppt efficency, model later?"
+m_rest,2,(X)Estimate fusulage + tail weight(Kg)
+m_L,0.5,"(X)Mass of layup, per meter, without batteries(Kg)"
+P_av,2,"(X)Power consumption of avionics(servos, flight controller ect) (W)"
+P_pld,0,"(X)Power consuption  of payload(Remote id, leds, fpv ect) (W)"
+Ch,0.3,Chord(M)
+L_min,3,Minimum wingspan (M)
+L_max,7,Maximum wingspan (M)
+m_bat_min,0,
+m_bat_max,4,
+e_bat,250,Specific energy (Wh/kg)
+f_usable,0.8,Fraction of rated energy usable
+reserve_fraction,0.3,Fraction of the battery we want available by morning

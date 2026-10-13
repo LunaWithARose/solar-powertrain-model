@@ -1,10 +1,15 @@
 import numpy as np
 from datetime import timedelta, datetime
+import csv
 
 from functions import P_sol, P_level, dE_bat_dt
 from power_time import plot_results
 from battery_wingspan import plot_design_space
 
+# Loading technical parameters
+with open('params.csv', newline='', mode='r', encoding='utf-8-sig') as file:
+    reader = csv.DictReader(file)
+    p = {row['param']:float(row['value']) for row in reader}
 
 # Aircraft and environmental parameters
 
@@ -13,34 +18,8 @@ h = 820      #altitude(M)
 date_time = datetime(2027, 6, 11, 7, 0) #date, Y-M-D-H-M
 normal = np.array([0,0,-1])   #North-East-Down normal vector
 
-C_L = 0.8            #Coeff of lift
-C_D = 0.017          #(Y)Coeff of drag, need to add parasitic and induced drag
-
-
-
-Eta_prop = 1.0       #(X)Prop, Esc, Motor effiency, need to test
-Eta_mppt = 0.97      #(X)Mppt efficency, model later?
-
-m_rest = 2.0         #(X)Estimate fusulage + tail weight(Kg)
-m_L = 0.5            #(X)Mass of layup, per meter, without batteries(Kg)
-P_av = 2.0           #(X)Power consumption of avionics(servos, flight controller ect) (W)
-P_pld = 0.0          #(X)Power consuption  of payload(Remote id, leds, fpv ect) (W)
-
-
-Ch = 0.3             #Chord(M)
-
-L = 6.0              #Length of wing(M)         This will be a variable that will be optimized
-L_min = 3.0          # Minimum wingspan (M)
-L_max = 7.0          # Maximum wingspan (M)
-L_step = 0.1        
-
-m_bat = 2.5         #Weight of batteries(Kg)   This will be a veriable that will be optimized 
-m_bat_min = 0.0
-m_bat_max = 4.0
+L_step = 0.1
 m_bat_step = 0.1
-e_bat = 250.0        #Specific energy (Wh/kg)
-f_usable = 0.80      #Fraction of rated energy usable
-reserve_fraction = 0.30  # Fraction of the battery we want available by morning
 
 # Simulation parameters
 dt_hours = 1.0 / 5.0   #5-minute time steps
@@ -59,8 +38,8 @@ steps_per_day = int(round(24.0 / dt_hours))
 
 
 def battery_limits(m_bat):
-    E_max = m_bat * e_bat * f_usable
-    E_min = reserve_fraction * E_max
+    E_max = m_bat * p['e_bat'] * p['f_usable']
+    E_min = p['reserve_fraction'] * E_max
     return E_min, E_max
 
 
@@ -70,10 +49,10 @@ def simulate_battery(L, m_bat, solar_power):
     E_min, E_max = battery_limits(m_bat)
 
     motor_power = P_level(
-        L, m_bat, C_D, C_L, m_L, m_rest, h, Ch
-    ) / Eta_prop
+        L, m_bat, p['C_D'], p['C_L'], p['m_L'], p['m_rest'], h, p['Ch']
+    ) / p['Eta_prop']
 
-    load = motor_power + P_av + P_pld
+    load = motor_power + p['P_av'] + p['P_pld']
 
     # Positive = charging; negative = discharging
     battery_power = solar_power - load
@@ -108,8 +87,8 @@ def simulate_battery(L, m_bat, solar_power):
 
 L_values = np.round(
     np.arange(
-        L_min,
-        L_max + L_step / 2,
+        p['L_min'],
+        p['L_max'] + L_step / 2,
         L_step
     ),
     3
@@ -117,8 +96,8 @@ L_values = np.round(
 
 battery_values = np.round(
     np.arange(
-        m_bat_min,
-        m_bat_max + m_bat_step / 2,
+        p['m_bat_min'],
+        p['m_bat_max'] + m_bat_step / 2,
         m_bat_step
     ),
     3
@@ -132,7 +111,7 @@ for L_test in L_values:
     solar_profiles[L_test] = np.array([
         P_sol(
             L_test, lat, h, t,
-            normal, Ch, Eta_mppt
+            normal, p['Ch'], p['Eta_mppt']
         )
         for t in times
     ])
@@ -226,5 +205,5 @@ else:
         P_battery=P_battery,
         E_battery=E_battery,
         E_max=best["E_max"],
-        reserve_fraction=reserve_fraction
+        reserve_fraction=p['reserve_fraction']
     )
