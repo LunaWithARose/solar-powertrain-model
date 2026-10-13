@@ -2,208 +2,134 @@ import numpy as np
 from datetime import timedelta, datetime
 import csv
 
-from functions import P_sol, P_level, dE_bat_dt
+from functions import P_sol, P_level, dE_bat_dt, simulate_battery, battery_limits
 from power_time import plot_results
 from battery_wingspan import plot_design_space
 
-# Loading technical parameters
-with open('params.csv', newline='', mode='r', encoding='utf-8-sig') as file:
-    reader = csv.DictReader(file)
-    p = {row['param']:float(row['value']) for row in reader}
-
-# Aircraft and environmental parameters
-
-lat = 46.7   #latitude of flight(degrees)
-h = 820      #altitude(M)
-date_time = datetime(2027, 6, 11, 7, 0) #date, Y-M-D-H-M
-normal = np.array([0,0,-1])   #North-East-Down normal vector
-
-L_step = 0.1
-m_bat_step = 0.1
-
-# Simulation parameters
-dt_hours = 1.0 / 5.0   #5-minute time steps
-simulation_hours = 48  # wo days to examine repeatability
-n_steps = int(simulation_hours / dt_hours)
-
-n_steps = int(round(simulation_hours / dt_hours))
-
-times = [
-    date_time + timedelta(hours=k * dt_hours)
-    for k in range(n_steps + 1)
-]
-
-# Index for comparing the same time on consecutive days
-steps_per_day = int(round(24.0 / dt_hours))
 
 
-def battery_limits(m_bat):
-    E_max = m_bat * p['e_bat'] * p['f_usable']
-    E_min = p['reserve_fraction'] * E_max
-    return E_min, E_max
+def optimize(date_time, dt_hours, p, L_step, m_bat_step, normal, lat, h, n_steps, m_bat, L):
 
+    times = [
+        date_time + timedelta(hours=k * dt_hours)
+        for k in range(n_steps + 1)
+    ]
 
+    # Index for comparing the same time on consecutive days
+    steps_per_day = int(round(24.0 / dt_hours))
 
-def simulate_battery(L, m_bat, solar_power):
-
-    E_min, E_max = battery_limits(m_bat)
-
-    motor_power = P_level(
-        L, m_bat, p['C_D'], p['C_L'], p['m_L'], p['m_rest'], h, p['Ch']
-    ) / p['Eta_prop']
-
-    load = motor_power + p['P_av'] + p['P_pld']
-
-    # Positive = charging; negative = discharging
-    battery_power = solar_power - load
-
-    energy = np.zeros(len(times))
-    energy[0] = E_max
-
-    for k in range(n_steps):
-        E_next = (
-            energy[k] + battery_power[k] * dt_hours
-        )
-        energy[k + 1] = min(E_next, E_max)
-
-    # Must maintain the required reserve at every timestep
-    reserve_ok = np.all(energy >= E_min)
-
-    # Compare energy at the same clock time on days 1 and 2
-    repeatability_ok = (
-        energy[-1] >= energy[-1 - steps_per_day]
+    L_values = np.round(
+        np.arange(
+            p['L_min'],
+            p['L_max'] + L_step / 2,
+            L_step
+        ),
+        3
     )
 
-    feasible = reserve_ok and repeatability_ok
-
-    return (
-        energy,
-        battery_power,
-        load,
-        motor_power,
-        feasible
+    battery_values = np.round(
+        np.arange(
+            p['m_bat_min'],
+            p['m_bat_max'] + m_bat_step / 2,
+            m_bat_step
+        ),
+        3
     )
 
+    print("Precomputing solar power profiles...")
 
-L_values = np.round(
-    np.arange(
-        p['L_min'],
-        p['L_max'] + L_step / 2,
-        L_step
-    ),
-    3
-)
+    solar_profiles = {}
 
-battery_values = np.round(
-    np.arange(
-        p['m_bat_min'],
-        p['m_bat_max'] + m_bat_step / 2,
-        m_bat_step
-    ),
-    3
-)
-
-print("Precomputing solar power profiles...")
-
-solar_profiles = {}
-
-for L_test in L_values:
-    solar_profiles[L_test] = np.array([
-        P_sol(
-            L_test, lat, h, t,
-            normal, p['Ch'], p['Eta_mppt']
-        )
-        for t in times
-    ])
+    for L_test in L_values:
+        solar_profiles[L_test] = np.array([
+            P_sol(
+                L_test, lat, h, t,
+                normal, p
+            )
+            for t in times
+        ])
 
 
-print("Searching candidate designs...")
+    print("Searching candidate designs...")
 
-feasible_designs = []
-all_designs = []
+    feasible_designs = []
+    all_designs = []
 
-for L_test in L_values:
-    solar_power = solar_profiles[L_test]
+    for L_test in L_values:
+        solar_power = solar_profiles[L_test]
 
-    for m_bat_test in battery_values:
+        for m_bat_test in battery_values:
 
-        (
-            energy,
-            battery_power,
-            load,
-            motor_power,
-            feasible
-        ) = simulate_battery(
-            L_test, m_bat_test, solar_power
+            (
+                    energy,
+                    battery_power,
+                    load,
+                    motor_power,
+                    feasible
+                ) = simulate_battery(
+                    solar_power,
+                    times,
+                    n_steps,
+                    dt_hours,
+                    steps_per_day,
+                    p,
+                    m_bat_test,
+                    L_test,
+                    h
+                )
+
+            E_min, E_max = battery_limits(p, m_bat_test)
+
+            result = {
+                "L": L_test,
+                "m_bat": m_bat_test,
+                "motor_power": motor_power,
+                "load": load,
+                "min_energy": float(energy.min()),
+                "final_energy": float(energy[-1]),
+                "day1_end_energy": float(
+                    energy[steps_per_day]
+                ),
+                "E_max": E_max,
+                "E_min": E_min,
+                "feasible": feasible,
+            }
+
+            all_designs.append(result)
+
+            if feasible:
+                feasible_designs.append(result)
+
+
+    if not feasible_designs:
+        print("\nNo feasible design found within the search bounds.")
+
+    else:
+        # minimum battery mass.
+        best = min(
+            feasible_designs,
+            key=lambda d: (d["m_bat"], d["L"])
         )
 
-        E_min, E_max = battery_limits(m_bat_test)
+        L = best["L"]
+        m_bat = best["m_bat"]
 
-        result = {
-            "L": L_test,
-            "m_bat": m_bat_test,
-            "motor_power": motor_power,
-            "load": load,
-            "min_energy": float(energy.min()),
-            "final_energy": float(energy[-1]),
-            "day1_end_energy": float(
-                energy[steps_per_day]
-            ),
-            "E_max": E_max,
-            "E_min": E_min,
-            "feasible": feasible,
-        }
-
-        all_designs.append(result)
-
-        if feasible:
-            feasible_designs.append(result)
+        print("\n========== OPTIMAL DESIGN ==========")
+        print(f"Wingspan:              {L:.2f} m")
+        print(f"Battery mass:          {m_bat:.2f} kg")
+        print(f"Battery capacity:      {best['E_max']:.1f} Wh")
+        print(f"Minimum reserve:       {best['E_min']:.1f} Wh")
+        print(f"Motor power:           {best['motor_power']:.2f} W")
+        print(f"Total electrical load: {best['load']:.2f} W")
+        print(f"Minimum energy:        {best['min_energy']:.1f} Wh")
+        print(f"Energy after 24 h:     {best['day1_end_energy']:.1f} Wh")
+        print(f"Energy after 48 h:     {best['final_energy']:.1f} Wh")
+        print(f"Feasible designs:      {len(feasible_designs)}")
+        print(f"Designs tested:        {len(all_designs)}")
 
 
-if not feasible_designs:
-    print("\nNo feasible design found within the search bounds.")
+        P_solar = solar_profiles[L]
 
-else:
-    # minimum battery mass.
-    best = min(
-        feasible_designs,
-        key=lambda d: (d["m_bat"], d["L"])
-    )
+        E_max = best["E_max"]
 
-    L = best["L"]
-    m_bat = best["m_bat"]
-
-    print("\n========== OPTIMAL DESIGN ==========")
-    print(f"Wingspan:              {L:.2f} m")
-    print(f"Battery mass:          {m_bat:.2f} kg")
-    print(f"Battery capacity:      {best['E_max']:.1f} Wh")
-    print(f"Minimum reserve:       {best['E_min']:.1f} Wh")
-    print(f"Motor power:           {best['motor_power']:.2f} W")
-    print(f"Total electrical load: {best['load']:.2f} W")
-    print(f"Minimum energy:        {best['min_energy']:.1f} Wh")
-    print(f"Energy after 24 h:     {best['day1_end_energy']:.1f} Wh")
-    print(f"Energy after 48 h:     {best['final_energy']:.1f} Wh")
-    print(f"Feasible designs:      {len(feasible_designs)}")
-    print(f"Designs tested:        {len(all_designs)}")
-
-
-    P_solar = solar_profiles[L]
-
-    (
-        E_battery,
-        P_battery,
-        P_load,
-        P_motor,
-        feasible
-    ) = simulate_battery(L, m_bat, P_solar)
-
-    plot_results(
-        times=times,
-        P_solar=P_solar,
-        P_motor=P_motor,
-        P_load=P_load,
-        P_battery=P_battery,
-        E_battery=E_battery,
-        E_max=best["E_max"],
-        reserve_fraction=p['reserve_fraction']
-    )
+        return (P_solar, L, m_bat, times, E_max)

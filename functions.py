@@ -11,24 +11,24 @@ Ep_T_sm = 1.0        #(Y)Temperature efficency, need to model
 Ep_cbr_sm = 0.97     #Wing Chamber Efficency, V1 results
 
 
-def P_sol(L, lat, h, date_time, normal, Ch, Eta_mppt):
+def P_sol(L, lat, h, date_time, normal, p):
 
     irradiance = irradiance_on_plane(
          normal, h, date_time, lat
     )
 
-    panel_area = Ch * L * 0.85  # 85% of wing area covered by solar cells
+    panel_area = p['Ch'] * L * 0.85  # 85% of wing area covered by solar cells
 
-    return irradiance * panel_area * Eta_sm() * Eta_mppt
+    return irradiance * panel_area * Eta_sm() * p['Eta_mppt']
 
 
-def P_level(L, m_bat, C_D, C_L, m_L, m_rest, h, Ch):    
+def P_level(L, m_bat, h, p):    
 
-    total_mass = ((m_L * L)) + m_bat + m_rest
-    wing_area = Ch * L
+    total_mass = ((p['m_L'] * L)) + m_bat + p['m_rest']
+    wing_area = p['Ch'] * L
 
     return (
-        C_D / (C_L ** (3 / 2))
+        p['C_D'] / (p['C_L'] ** (3 / 2))
         * (
            2 * (total_mass * 9.81) ** 3
             / (rho(h) * wing_area)
@@ -64,17 +64,63 @@ def rho(h):
 
 
 
-def dE_bat_dt(L, Ch, lat, h, date_time, normal, Eta_mppt,
-              C_D, C_L, m_L, m_rest, m_bat, Eta_prop, P_av, P_pld):
+def dE_bat_dt(L, p, m_bat, normal, date_time, h, lat):
     solar_power = P_sol(
-        L, lat, h, date_time, normal, Ch, Eta_mppt
+        L, lat, h, date_time, normal, p['Ch'], p['Eta_mppt']
     )
 
     propulsion_power = P_level(
-        L, m_bat, C_D, C_L, m_L, m_rest, h, Ch
-    ) / Eta_prop
+        L, m_bat, p['C_D'], p['C_L'], p['m_L'], p['m_rest'], h, p['Ch']
+    ) / p['Eta_prop']
 
-    total_load = propulsion_power + P_av + P_pld
+    total_load = propulsion_power + p['P_av'] + p['P_pld']
 
     return solar_power - total_load
+
+def battery_limits(p, m_bat):
+    E_max = m_bat * p['e_bat'] * p['f_usable']
+    E_min = p['reserve_fraction'] * E_max
+    return E_min, E_max
+
+
+
+def simulate_battery(solar_power, times, n_steps, dt_hours, steps_per_day, p, m_bat, L, h):
+
+    E_min, E_max = battery_limits(p, m_bat)
+
+    motor_power = P_level(
+        L, m_bat, h, p
+    ) / p['Eta_prop']
+
+    load = motor_power + p['P_av'] + p['P_pld']
+
+    # Positive = charging; negative = discharging
+    battery_power = solar_power - load
+
+    energy = np.zeros(len(times))
+    energy[0] = E_max
+
+    for k in range(n_steps):
+        E_next = (
+            energy[k] + battery_power[k] * dt_hours
+        )
+        energy[k + 1] = min(E_next, E_max)
+
+    # Must maintain the required reserve at every timestep
+    reserve_ok = np.all(energy >= E_min)
+
+    # Compare energy at the same clock time on days 1 and 2
+    repeatability_ok = (
+        energy[-1] >= energy[-1 - steps_per_day]
+    )
+
+    feasible = reserve_ok and repeatability_ok
+
+    return (
+        energy,
+        battery_power,
+        load,
+        motor_power,
+        feasible
+    )
 
